@@ -1,0 +1,36 @@
+
+# === xv6-labs build artifacts ===
+*.o
+*.d
+*.out
+*.img
+*.map
+*.ld
+*.host
+
+# xv6 build output
+xv6.out
+fs.img
+kernel/kernel
+user/_*
+user/usertests
+mkfs/mkfs
+
+# Debug & gdb
+.gdbinit
+.gdbinit.*
+
+# LSP / compile db
+compile_commands.json
+
+# Python
+__pycache__/
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+.dir-locals.el
+
+# Cache
+.cache/
