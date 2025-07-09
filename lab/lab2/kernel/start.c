@@ -10,9 +10,12 @@ int main();
 void timerinit();
 
 // entry.S needs one stack per CPU.
+// __attribute__((aligned(16))) 指定对齐方式为16字节，确保栈的起始地址是16字节对齐的。
+// NCPU 最大 CPU 数量
 __attribute__((aligned(16))) char stack0[4096 * NCPU];
 
 // entry.S jumps here in machine mode on stack0.
+// 每个CPU启动时都会调用这个函数。
 void start() {
     // set M Previous Privilege mode to Supervisor, for mret.
     unsigned long x = r_mstatus();
@@ -22,9 +25,13 @@ void start() {
 
     // set M Exception Program Counter to main, for mret.
     // requires gcc -mcmodel=medany
+    // 异常返回时会跳转到 main 函数。
     w_mepc((uint64)main);
 
     // disable paging for now.
+    // 在特权者模式中把0写入页表寄存器satp中
+    // 禁用虚拟地址转换
+    // 并把所有中断和异常委托给特权者模式
     w_satp(0);
 
     // delegate all interrupts and exceptions to supervisor mode.

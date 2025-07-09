@@ -77,3 +77,15 @@ uint64 sys_uptime(void) {
     release(&tickslock);
     return xticks;
 }
+
+uint64 sys_freemem(void) {
+    return freemem();
+}
+
+uint64 sys_trace(void) {
+    int n;
+
+    argint(0, &n);
+    myproc()->sys_trace_mask = n;
+    return 0;
+}

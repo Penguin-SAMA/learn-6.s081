@@ -82,3 +82,18 @@ void* kalloc(void) {
 #endif
     return (void*)r;
 }
+
+// 统计剩余的物理内存页数
+uint64 freemem(void) {
+    struct run* r;
+    uint64 free = 0;
+
+    acquire(&kmem.lock);
+    r = kmem.freelist;
+    while (r) {
+        free += PGSIZE;
+        r = r->next;
+    }
+    release(&kmem.lock);
+    return free;
+}

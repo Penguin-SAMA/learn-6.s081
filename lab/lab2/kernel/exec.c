@@ -45,10 +45,11 @@ int exec(char* path, char** argv) {
     if (elf.magic != ELF_MAGIC)
         goto bad;
 
+    // 创建用户页表
     if ((pagetable = proc_pagetable(p)) == 0)
         goto bad;
 
-    // Load program into memory.
+    // Load program into memory
     for (i = 0, off = elf.phoff; i < elf.phnum; i++, off += sizeof(ph)) {
         if (readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
             goto bad;
@@ -61,9 +62,11 @@ int exec(char* path, char** argv) {
         if (ph.vaddr % PGSIZE != 0)
             goto bad;
         uint64 sz1;
+        // 分配虚拟内存
         if ((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags))) == 0)
             goto bad;
         sz = sz1;
+        // 将程序段加载到虚拟内存中
         if (loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
             goto bad;
     }
@@ -74,6 +77,7 @@ int exec(char* path, char** argv) {
     p = myproc();
     uint64 oldsz = p->sz;
 
+    // 构建用户栈
     // Allocate some pages at the next page boundary.
     // Make the first inaccessible as a stack guard.
     // Use the rest as the user stack.
@@ -86,6 +90,7 @@ int exec(char* path, char** argv) {
     sp = sz;
     stackbase = sp - USERSTACK * PGSIZE;
 
+    // 拷贝参数到用户栈
     // Push argument strings, prepare rest of stack in ustack.
     for (argc = 0; argv[argc]; argc++) {
         if (argc >= MAXARG)

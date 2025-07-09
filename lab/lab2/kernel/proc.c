@@ -8,11 +8,11 @@
 #include "proc.h"
 #include "defs.h"
 
-struct cpu cpus[NCPU];
+struct cpu cpus[NCPU]; // 表示每个CPU的状态信息
 
-struct proc proc[NPROC];
+struct proc proc[NPROC]; // 进程表，保存所有进程的信息
 
-struct proc* initproc;
+struct proc* initproc; // 指向初始进程
 
 int nextpid = 1;
 struct spinlock pid_lock;
@@ -28,9 +28,7 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
-// Allocate a page for each process's kernel stack.
-// Map it high in memory, followed by an invalid
-// guard page.
+// 为每个进程分配内核栈，并将其映射到高地址空间。
 void proc_mapstacks(pagetable_t kpgtbl) {
     struct proc* p;
 
@@ -43,7 +41,7 @@ void proc_mapstacks(pagetable_t kpgtbl) {
     }
 }
 
-// initialize the proc table.
+// 初始化进程表、进程锁、内核栈
 void procinit(void) {
     struct proc* p;
 
@@ -56,23 +54,20 @@ void procinit(void) {
     }
 }
 
-// Must be called with interrupts disabled,
-// to prevent race with process being moved
-// to a different CPU.
+// 获取当前CPU的ID（必须在中断被禁用的情况下调用）
 int cpuid() {
     int id = r_tp();
     return id;
 }
 
-// Return this CPU's cpu struct.
-// Interrupts must be disabled.
+// 获取当前CPU结构体指针
 struct cpu* mycpu(void) {
     int id = cpuid();
     struct cpu* c = &cpus[id];
     return c;
 }
 
-// Return the current struct proc *, or zero if none.
+// 获取当前正在运行的进程结构体指针
 struct proc* myproc(void) {
     push_off();
     struct cpu* c = mycpu();
@@ -81,6 +76,7 @@ struct proc* myproc(void) {
     return p;
 }
 
+// 分配一个新的进程ID，确保每个进程都有唯一的ID。
 int allocpid() {
     int pid;
 
@@ -92,10 +88,10 @@ int allocpid() {
     return pid;
 }
 
-// Look in the process table for an UNUSED proc.
-// If found, initialize state required to run in the kernel,
-// and return with p->lock held.
-// If there are no free procs, or a memory allocation fails, return 0.
+// 在进程表中查找未使用的进程。
+// 如果找到，则初始化内核运行所需的状态，
+// 并返回 p->lock 持有的状态。
+// 如果没有空闲的进程，或者内存分配失败，则返回 0。
 static struct proc* allocproc(void) {
     struct proc* p;
 
@@ -137,9 +133,7 @@ found:
     return p;
 }
 
-// free a proc structure and the data hanging from it,
-// including user pages.
-// p->lock must be held.
+// 释放一个进程的资源，包括 trapframe 页、页表和内核栈等。
 static void freeproc(struct proc* p) {
     if (p->trapframe)
         kfree((void*)p->trapframe);
@@ -157,8 +151,7 @@ static void freeproc(struct proc* p) {
     p->state = UNUSED;
 }
 
-// Create a user page table for a given process, with no user memory,
-// but with trampoline and trapframe pages.
+// 为一个进程创建一个页表，并映射 trampoline 和 trapframe 页。
 pagetable_t proc_pagetable(struct proc* p) {
     pagetable_t pagetable;
 
@@ -167,18 +160,15 @@ pagetable_t proc_pagetable(struct proc* p) {
     if (pagetable == 0)
         return 0;
 
-    // map the trampoline code (for system call return)
-    // at the highest user virtual address.
-    // only the supervisor uses it, on the way
-    // to/from user space, so not PTE_U.
+    // 在最高用户虚拟地址映射trampoline代码（用于系统调用返回）
+    // 仅有主管在往返用户空间的途中使用它，因此不是 PTE_U。
     if (mappages(pagetable, TRAMPOLINE, PGSIZE,
                  (uint64)trampoline, PTE_R | PTE_X) < 0) {
         uvmfree(pagetable, 0);
         return 0;
     }
 
-    // map the trapframe page just below the trampoline page, for
-    // trampoline.S.
+    // 对于 trampoline.S，将 trapframe 页面映射到 trampoline 页面的正下方。
     if (mappages(pagetable, TRAPFRAME, PGSIZE,
                  (uint64)(p->trapframe), PTE_R | PTE_W) < 0) {
         uvmunmap(pagetable, TRAMPOLINE, 1, 0);
@@ -189,8 +179,7 @@ pagetable_t proc_pagetable(struct proc* p) {
     return pagetable;
 }
 
-// Free a process's page table, and free the
-// physical memory it refers to.
+// 释放一个进程的页表及其物理内存
 void proc_freepagetable(pagetable_t pagetable, uint64 sz) {
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
     uvmunmap(pagetable, TRAPFRAME, 1, 0);
@@ -209,7 +198,7 @@ uchar initcode[] = {
     0x74, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00};
 
-// Set up first user process.
+// 创建一个初始进程，通常是 init 进程。
 void userinit(void) {
     struct proc* p;
 
@@ -233,7 +222,7 @@ void userinit(void) {
     release(&p->lock);
 }
 
-// Grow or shrink user memory by n bytes.
+// 增加或减少当前进程的虚拟内存大小。
 // Return 0 on success, -1 on failure.
 int growproc(int n) {
     uint64 sz;
@@ -251,8 +240,7 @@ int growproc(int n) {
     return 0;
 }
 
-// Create a new process, copying the parent.
-// Sets up child kernel stack to return as if from fork() system call.
+// 创建一个新进程，复制父进程的内存空间和状态。
 int fork(void) {
     int i, pid;
     struct proc* np;
@@ -285,6 +273,8 @@ int fork(void) {
 
     safestrcpy(np->name, p->name, sizeof(p->name));
 
+    np->sys_trace_mask = p->sys_trace_mask;
+
     pid = np->pid;
 
     release(&np->lock);
@@ -300,8 +290,7 @@ int fork(void) {
     return pid;
 }
 
-// Pass p's abandoned children to init.
-// Caller must hold wait_lock.
+// 将所有子进程的父进程设置为 initproc。
 void reparent(struct proc* p) {
     struct proc* pp;
 
@@ -313,9 +302,7 @@ void reparent(struct proc* p) {
     }
 }
 
-// Exit the current process.  Does not return.
-// An exited process remains in the zombie state
-// until its parent calls wait().
+// 当前进程退出，释放资源并将其状态设置为 ZOMBIE。
 void exit(int status) {
     struct proc* p = myproc();
 
@@ -356,8 +343,7 @@ void exit(int status) {
     panic("zombie exit");
 }
 
-// Wait for a child process to exit and return its pid.
-// Return -1 if this process has no children.
+// 等待子进程退出，返回子进程的 PID。
 int wait(uint64 addr) {
     struct proc* pp;
     int havekids, pid;
@@ -403,7 +389,7 @@ int wait(uint64 addr) {
     }
 }
 
-// Per-CPU process scheduler.
+// 每个CPU的调度器函数
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
 //  - choose a process to run.
@@ -447,13 +433,10 @@ void scheduler(void) {
     }
 }
 
-// Switch to scheduler.  Must hold only p->lock
-// and have changed proc->state. Saves and restores
-// intena because intena is a property of this
-// kernel thread, not this CPU. It should
-// be proc->intena and proc->noff, but that would
-// break in the few places where a lock is held but
-// there's no process.
+// 切换到调度器（scheduler）。
+// 必须只持有 p->lock 锁，并且已将进程状态（p->state）更新。
+// 保存并恢复 intena（中断使能标志），因为 intena 是这个“内核线程”的属性，而不是 CPU 的。
+// 按理说它应该是 proc->intena 和 proc->noff，但那样会破坏某些在没有 proc 的地方持有锁的代码。
 void sched(void) {
     int intena;
     struct proc* p = myproc();
@@ -472,7 +455,7 @@ void sched(void) {
     mycpu()->intena = intena;
 }
 
-// Give up the CPU for one scheduling round.
+// 进程让出 CPU，进入 RUNNABLE 状态。
 void yield(void) {
     struct proc* p = myproc();
     acquire(&p->lock);
@@ -503,8 +486,8 @@ void forkret(void) {
     usertrapret();
 }
 
-// Atomically release lock and sleep on chan.
-// Reacquires lock when awakened.
+// 进程进入睡眠状态，等待某个事件发生。
+// 原子释放 lk 锁，并将进程状态设置为 SLEEPING。
 void sleep(void* chan, struct spinlock* lk) {
     struct proc* p = myproc();
 
@@ -532,8 +515,7 @@ void sleep(void* chan, struct spinlock* lk) {
     acquire(lk);
 }
 
-// Wake up all processes sleeping on chan.
-// Must be called without any p->lock.
+// 唤醒所有在 chan 上睡眠的进程。
 void wakeup(void* chan) {
     struct proc* p;
 
@@ -548,9 +530,7 @@ void wakeup(void* chan) {
     }
 }
 
-// Kill the process with the given pid.
-// The victim won't exit until it tries to return
-// to user space (see usertrap() in trap.c).
+// 设置指定进程的killed标志，若进程正在睡眠状态，则将其唤醒。
 int kill(int pid) {
     struct proc* p;
 
@@ -585,9 +565,7 @@ int killed(struct proc* p) {
     return k;
 }
 
-// Copy to either a user address, or kernel address,
-// depending on usr_dst.
-// Returns 0 on success, -1 on error.
+// 支持从用户地址或内核地址复制数据到用户空间。
 int either_copyout(int user_dst, uint64 dst, void* src, uint64 len) {
     struct proc* p = myproc();
     if (user_dst) {
@@ -598,9 +576,6 @@ int either_copyout(int user_dst, uint64 dst, void* src, uint64 len) {
     }
 }
 
-// Copy from either a user address, or kernel address,
-// depending on usr_src.
-// Returns 0 on success, -1 on error.
 int either_copyin(void* dst, int user_src, uint64 src, uint64 len) {
     struct proc* p = myproc();
     if (user_src) {
@@ -611,17 +586,15 @@ int either_copyin(void* dst, int user_src, uint64 src, uint64 len) {
     }
 }
 
-// Print a process listing to console.  For debugging.
-// Runs when user types ^P on console.
-// No lock to avoid wedging a stuck machine further.
+// 打印当前系统中所有进程的信息，包括 PID、状态和名称等。
 void procdump(void) {
     static char* states[] = {
-        [UNUSED] "unused",
-        [USED] "used",
-        [SLEEPING] "sleep ",
-        [RUNNABLE] "runble",
-        [RUNNING] "run   ",
-        [ZOMBIE] "zombie"};
+        [UNUSED] = "unused",
+        [USED] = "used",
+        [SLEEPING] = "sleep ",
+        [RUNNABLE] = "runble",
+        [RUNNING] = "run   ",
+        [ZOMBIE] = "zombie"};
     struct proc* p;
     char* state;
 

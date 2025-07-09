@@ -1,11 +1,11 @@
 // 在启动过程中控制其他模块的初始化
-
 #include "types.h"
 #include "param.h"
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
 
+// volatile: 防止编译器优化，确保变量的值在多核环境中正确同步
 volatile static int started = 0;
 
 // start() jumps here in supervisor mode on all CPUs.
@@ -41,5 +41,5 @@ int main() {
         plicinithart(); // ask PLIC for device interrupts
     }
 
-    scheduler();
+    scheduler(); // 调度器
 }
